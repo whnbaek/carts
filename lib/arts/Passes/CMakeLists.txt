@@ -7,7 +7,6 @@ add_mlir_dialect_library(MLIRArtsTransforms
   Edt.cpp
   CreateDatablocks.cpp
   Datablock.cpp
-  CreateEvents.cpp
   CreateEpochs.cpp
   ConvertArtsToLLVM.cpp
   EdtInvariantCodeMotion.cpp

@@ -55,7 +55,6 @@ polygeist:
 		-DMLIR_DIR=$(LLVM_BUILD_DIR)/lib/cmake/mlir \
 		-DClang_DIR=$(LLVM_BUILD_DIR)/lib/cmake/clang \
 		-DLLVM_EXTERNAL_LIT="$(LLVM_BUILD_DIR)/bin/llvm-lit" \
-		-DLLVM_USE_LINKER=lld \
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON 
 	ninja -C $(POLYGEIST_BUILD_DIR) install
 polygeist-clean:
@@ -76,7 +75,6 @@ llvm:
 		-DLLVM_ENABLE_RUNTIMES='openmp' \
 		-DLLVM_OPTIMIZED_TABLEGEN=ON \
 		-DLLVM_TARGETS_TO_BUILD="host" \
-		-DLLVM_USE_LINKER=lld \
 		-DLLVM_ENABLE_ASSERTIONS=ON \
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON 
 	ninja -C $(LLVM_BUILD_DIR) install

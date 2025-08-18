@@ -110,4 +110,5 @@ def EdtPointerRematerialization : Pass<"edt-pointer-rematerialization", "mlir::M
   ];
   let constructor = "mlir::arts::createEdtPointerRematerializationPass()";
 }
+
 #endif // CARTS_PASSES
