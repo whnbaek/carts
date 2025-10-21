@@ -1,0 +1,17 @@
+benchmark:
+  problem_sizes:
+    - "default"
+  iterations:
+    - 10
+  args:
+    - ""
+  threads:
+    - 1
+    - 2
+    - 4
+    - 8
+    - 16
+profiling:
+  profiling_enabled: true
+  counter_enabled: true
+  introspection_enabled: true

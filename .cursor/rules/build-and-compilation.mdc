@@ -1,0 +1,118 @@
+---
+description: When you need to understand how to run or build the project
+alwaysApply: false
+---
+# Build and Compilation Process
+
+## Build System
+The project uses a [Makefile](mdc:Makefile) to manage the complete build process.
+
+### Quick Start
+```bash
+# Build everything
+make build
+
+# Setup environment
+make enable
+source enable
+```
+
+### Build Structure
+- **CARTS**: Main compiler framework
+- **ARTS**: Runtime system in [./external/arts/](mdc:external/arts/)
+- **Polygeist**: C++ to MLIR compiler in `./external/Polygeist/`
+- **LLVM**: LLVM 18 with MLIR in `./external/Polygeist/llvm-project/`
+
+### Install Directories
+- `CARTS_INSTALL_DIR`: `./.install/carts`
+- `ARTS_INSTALL_DIR`: `./.install/arts`
+- `LLVM_INSTALL_DIR`: `./.install/llvm`
+- `POLYGEIST_INSTALL_DIR`: `./.install/polygeist`
+
+## CARTS Wrapper Script - Primary Interface
+
+**IMPORTANT**: Always use the `carts` wrapper script for all CARTS operations. This ensures proper path resolution, library linking, and environment setup.
+
+### Available Commands
+```bash
+carts build                    # Build CARTS project
+carts cgeist <file> [opts]     # Convert C++ to MLIR
+carts run [opts]               # Run ARTS transformations
+carts mlir-translate <file>    # Convert MLIR to LLVM IR
+carts compile <file> [opts]    # Compile LLVM IR to executable
+carts execute <file> [opts]    # Complete pipeline: C++ → executable
+carts benchmark [opts]         # Run benchmarks
+carts report [opts]            # Generate reports
+carts setup [opts]             # Setup environment
+carts clean                    # Clean generated files
+```
+
+### Cleaning and Rebuild Guidance
+- Run `carts clean` only inside the specific example/test directory you are working on (e.g., `tests/test/tasksimple`, `examples/tasking/matrixmul`).
+- Do not rebuild the entire CARTS project unless you have modified CARTS itself (files under `include/`, `lib/`, `tools/`, or build system configs).
+
+## Complete Compilation Pipeline
+
+### Pipeline Overview
+```
+C++ Source (.cpp)
+    ↓
+carts cgeist → MLIR (.mlir)
+    ↓
+carts run → LLVM IR (.ll)
+    ↓
+carts compile → Executable (binary)
+```
+
+## Alternative: Complete Pipeline with carts run
+
+For a complete transformation pipeline in one command:
+```bash
+carts run simple.mlir --O3 --arts-opt --emit-llvm > simple-arts.ll
+carts compile simple-arts.ll -o simple
+```
+
+## One-Command Execution: carts execute
+
+For complete end-to-end compilation from C++ source to executable:
+```bash
+carts execute simple.cpp -o simple
+```
+
+This automatically runs the entire pipeline:
+1. `carts cgeist` - Convert C++ to MLIR
+2. `carts run` - Apply ARTS transformations and convert to LLVM IR
+3. `carts compile` - Compile to executable with ARTS runtime
+
+## Debug Options
+```bash
+# Debug specific passes using carts run with pipeline stages
+carts run simple.mlir --convert-openmp -debug-only=convert_openmp_to_arts
+carts run simple.mlir --datablock -debug-only=create_dbs
+```
+
+## Pass Pipeline Control
+You can modify the pipeline by:
+- Adding/removing passes from the command line
+- Changing pass ordering
+- Enabling/disabling debug output
+- Adjusting optimization levels
+
+## Environment Variables
+```bash
+CARTS_VERBOSE=1 carts <command>  # Enable verbose output
+CARTS_INSTALL_DIR=/path/to/install  # Override install directory
+```
+
+## Performance Benchmarking
+```bash
+# Run benchmarks using carts script
+carts benchmark --target_examples matrixmul --problem_sizes "10 5" --iterations_per_size 5
+
+# Generate performance reports
+carts report --help
+```
+description:
+globs:
+alwaysApply: false
+---

@@ -5,44 +5,100 @@
 #ifndef CARTS_UTILS_ARTSUTILS_H
 #define CARTS_UTILS_ARTSUTILS_H
 
-#include "arts/ArtsDialect.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/Region.h"
+#include "mlir/IR/Value.h"
 
 namespace mlir {
 namespace arts {
 
-/// Checks if a Value is invariant within a given EDT region.
-/// A value is considered invariant if it's defined outside the region
-/// and not modified by any operation inside the region. Constants are
-/// always considered invariant.
-/// This assummes the EdtInvariantCodeMotion pass has been run.
-bool isInvariantInEdt(Region &edtRegion, Value value);
+//===----------------------------------------------------------------------===//
+/// IR Simplification Utilities
+//===----------------------------------------------------------------------===//
+bool simplifyIR(ModuleOp module, DominanceInfo &domInfo);
 
-/// Returns true if `target` is reachable from `source` in the EDT CFG.
+//===----------------------------------------------------------------------===//
+/// Value Analysis Utilities
+//===----------------------------------------------------------------------===//
+bool isValueConstant(Value val);
+bool getConstantIndex(Value v, int64_t &out);
+bool isNonZeroIndex(Value v);
+
+//===----------------------------------------------------------------------===//
+/// Type and Size Utilities
+//===----------------------------------------------------------------------===//
+uint64_t getElementTypeByteSize(Type elementType);
+MemRefType getElementMemRefType(Type elementType, ArrayRef<Value> elementSizes);
+
+//===----------------------------------------------------------------------===//
+/// String Utilities
+//===----------------------------------------------------------------------===//
+std::string sanitizeString(StringRef s);
+
+//===----------------------------------------------------------------------===//
+/// Range and Value Comparison Utilities
+//===----------------------------------------------------------------------===//
+bool equalRange(ValueRange a, ValueRange b);
+bool allSameValue(ValueRange values);
+bool scalesAreEquivalent(Value a, Value b);
+
+//===----------------------------------------------------------------------===//
+/// EDT Analysis Utilities
+//===----------------------------------------------------------------------===//
+bool isInvariantInEdt(Region &edtRegion, Value value);
 bool isReachable(Operation *source, Operation *target);
 
-/// Remove a set of operations from the module.
-void removeOps(mlir::ModuleOp module, OpBuilder &builder,
-               llvm::SetVector<mlir::Operation *> &opsToRemove);
-void recursivelyRemoveOp(mlir::Operation *op);
-void removeUndefOps(mlir::ModuleOp module);
+class EdtOp;
+class DbAcquireOp;
 
-/// Replace the operation with an undef operation.
-void replaceWithUndef(mlir::Operation *op, OpBuilder &builder);
-void replaceUses(mlir::Value from, mlir::Value to, DominanceInfo &domInfo,
+std::pair<EdtOp, BlockArgument>
+getEdtBlockArgumentForAcquire(DbAcquireOp acquireOp);
+
+//===----------------------------------------------------------------------===//
+/// Underlying Value Tracing Utilities
+//===----------------------------------------------------------------------===//
+Value getUnderlyingValue(Value v);
+Value stripNumericCasts(Value v);
+Operation *getUnderlyingOperation(Value v);
+Operation *getUnderlyingDb(Value v);
+Operation *getUnderlyingDbAlloc(Value v);
+
+//===----------------------------------------------------------------------===//
+/// Index Splitting Utilities for Datablocks
+//===----------------------------------------------------------------------===//
+std::pair<SmallVector<Value>, SmallVector<Value>>
+splitDbIndices(Operation *dbOp, ValueRange indices, OpBuilder &builder,
+                      Location loc);
+
+//===----------------------------------------------------------------------===//
+// Type Casting and Conversion Utilities
+//===----------------------------------------------------------------------===//
+Value castToIndex(Value value, OpBuilder &builder, Location loc);
+
+//===----------------------------------------------------------------------===//
+// Pattern Recognition and Analysis Utilities
+//===----------------------------------------------------------------------===//
+Value extractOriginalSize(Value numerator, Value denominator,
+                          OpBuilder &builder, Location loc);
+Value extractArrayIndexFromByteOffset(Value byteOffset, Type elemType);
+
+//===----------------------------------------------------------------------===//
+/// Operation Removal and Replacement Utilities
+//===----------------------------------------------------------------------===//
+
+void removeOps(ModuleOp module, SetVector<Operation *> &opsToRemove,
+               bool recursive = false);
+void removeUndefOps(ModuleOp module);
+void replaceWithUndef(Operation *op, OpBuilder &builder);
+void replaceUses(Value from, Value to, DominanceInfo &domInfo,
                  Operation *dominatingOp);
-
-/// Replace all uses of `from` with `to` in the module.
-void replaceUses(llvm::DenseMap<mlir::Value, mlir::Value> &rewireMap);
-void replaceInRegion(mlir::Region &region, mlir::Value from, mlir::Value to);
-void replaceInRegion(mlir::Region &region,
-                     llvm::DenseMap<mlir::Value, mlir::Value> &rewireMap,
+void replaceUses(DenseMap<Value, Value> &rewireMap);
+void replaceInRegion(Region &region, Value from, Value to);
+void replaceInRegion(Region &region, DenseMap<Value, Value> &rewireMap,
                      bool clear = true);
-
-/// Returns true if `val` is a constant value.
-bool isValueConstant(mlir::Value val);
 } // namespace arts
 } // namespace mlir
 

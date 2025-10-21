@@ -7,13 +7,10 @@
 #ifndef CARTS_ANALYSIS_STRINGANALYSIS_H
 #define CARTS_ANALYSIS_STRINGANALYSIS_H
 
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Pass/Pass.h"
-#include <utility>
 
 namespace mlir {
 namespace arts {

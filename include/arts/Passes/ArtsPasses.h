@@ -18,16 +18,24 @@ class RewritePatternSet;
 class DominanceInfo;
 
 namespace arts {
-std::unique_ptr<Pass> createConvertOpenMPtoARTSPass();
-std::unique_ptr<Pass> createEdtPass();
-std::unique_ptr<Pass> createCreateDatablocksPass();
-std::unique_ptr<Pass> createCreateDatablocksPass(bool identifyDbs);
-std::unique_ptr<Pass> createDatablockPass();
+class ArtsAnalysisManager;
+std::unique_ptr<Pass> createArtsInlinerPass();
+std::unique_ptr<Pass> createCanonicalizeMemrefsPass();
+std::unique_ptr<Pass> createConvertOpenMPtoArtsPass();
+std::unique_ptr<Pass> createEdtPass(ArtsAnalysisManager *AM, bool runAnalysis);
+std::unique_ptr<Pass> createConcurrencyPass(ArtsAnalysisManager *AM);
+std::unique_ptr<Pass> createCreateDbsPass(bool identifyDbs);
+std::unique_ptr<Pass> createDbPass(ArtsAnalysisManager *AM, bool exportJson);
 std::unique_ptr<Pass> createCreateEpochsPass();
 std::unique_ptr<Pass> createConvertArtsToLLVMPass();
 std::unique_ptr<Pass> createConvertArtsToLLVMPass(bool debug);
 std::unique_ptr<Pass> createEdtInvariantCodeMotionPass();
-std::unique_ptr<Pass> createEdtPointerRematerializationPass();
+std::unique_ptr<Pass> createEdtPtrRematerializationPass();
+std::unique_ptr<Pass> createCanonicalizeDbsPass();
+std::unique_ptr<Pass> createDbLoweringPass();
+std::unique_ptr<Pass> createEpochLoweringPass();
+std::unique_ptr<Pass> createParallelEdtLoweringPass();
+std::unique_ptr<Pass> createEdtLoweringPass();
 } // namespace arts
 } // namespace mlir
 

@@ -1,0 +1,66 @@
+---
+alwaysApply: true
+---
+# No Emoticons Rule
+
+## Primary Rule: No Emoticons
+
+**NEVER use emoticons, emojis, or similar symbols** in any CARTS documentation, code comments, scripts, or user-facing messages.
+
+## What Not to Use
+
+### ❌ Forbidden
+- 😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 ☹️ 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 🤥 😶 😐 😑 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕
+- Any Unicode emoji characters
+- ASCII emoticons like `:)`, `:(`, `:D`, `;)`, etc.
+- Text-based emoticons like `:-)`, `:-(`, `:-D`, etc.
+
+### ✅ Allowed
+- Plain text descriptions
+- Clear, professional language
+- Technical terminology
+- Standard punctuation marks (., !, ?, etc.)
+
+## Why This Rule Exists
+
+1. **Professionalism**: CARTS is a professional compiler framework
+2. **Accessibility**: Emoticons can cause issues with screen readers and text processing
+3. **Consistency**: Maintains clean, readable documentation
+4. **Internationalization**: Avoids cultural interpretation issues
+5. **Terminal Compatibility**: Some terminals don't display emoticons correctly
+
+## Examples
+
+### ❌ Wrong
+```bash
+echo "Build completed successfully! 🎉"
+echo "Error: Something went wrong 😞"
+echo "Processing... ⏳"
+```
+
+### ✅ Correct
+```bash
+echo "Build completed successfully!"
+echo "Error: Something went wrong"
+echo "Processing..."
+```
+
+## Enforcement
+
+- All documentation files (`.md`, `.mdc`)
+- All script files (`.sh`, `.py`, `.cpp`)
+- All user-facing messages
+- All code comments
+- All README files
+
+## Review Process
+
+When reviewing code or documentation:
+1. Check for any emoticon usage
+2. Replace with clear, descriptive text
+3. Ensure messages remain informative and helpful
+4. Maintain professional tone
+description:
+globs:
+alwaysApply: false
+---

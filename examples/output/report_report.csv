@@ -1,7 +1,0 @@
-Example Name,Problem Size,Version,Iterations Requested,Iterations Ran,Correctness Status,Min Time (s),Max Time (s),Average Time (s),Median Time (s),StdDev Time (s),Speedup (OMP/CARTS),Individual Times (s),CARTS Threads,CARTS Nodes,Overall Example Status
-addition,400,CARTS,5,5,CORRECT,0.00132,0.00156,0.00143,0.00140,0.00012,2.25x,"0.00156, 0.00155, 0.00132, 0.00132, 0.00140",16,1,run completed
-addition,400,OpenMP,5,5,CORRECT,0.00259,0.00509,0.00321,0.00272,0.00107,,"0.00509, 0.00305, 0.00272, 0.00259, 0.00260",,,run completed
-addition,500,CARTS,5,5,CORRECT,0.00166,0.00377,0.00212,0.00169,0.00092,1.68x,"0.00169, 0.00166, 0.00182, 0.00377, 0.00169",16,1,run completed
-addition,500,OpenMP,5,5,CORRECT,0.00251,0.00484,0.00356,0.00363,0.00099,,"0.00363, 0.00484, 0.00417, 0.00264, 0.00251",,,run completed
-addition,1000,CARTS,5,5,CORRECT,0.00316,0.00340,0.00330,0.00335,0.00010,0.97x,"0.00336, 0.00335, 0.00340, 0.00325, 0.00316",16,1,run completed
-addition,1000,OpenMP,5,5,CORRECT,0.00243,0.00402,0.00321,0.00317,0.00070,,"0.00402, 0.00380, 0.00317, 0.00261, 0.00243",,,run completed

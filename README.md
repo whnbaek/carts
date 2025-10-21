@@ -1,45 +1,37 @@
-# CARTS
-Author: Rafael Andres Herrera Guaitero
-Email: rafaelhg@udel.edu
+# CARTS - Compiler for Asynchronous Runtime System
 
-### Dependencies
-- ARTS
-- LLVM 18
-- Polygeist
+CARTS is an LLVM/MLIR-based compiler framework that implements the ARTS (Asynchronous Runtime System) dialect for distributed programming on modern architectures.
+
+## Full Documentation (Notion)
+- [CARTS Documentation](https://www.notion.so/248fde4bf3a2816d8c11f3c1cf5c4617)
+- [Architecture & Dependencies](https://www.notion.so/249fde4bf3a281b5ab16e087ee4056b1)
+- [Build and Run](https://www.notion.so/248fde4bf3a281dca4dde3c5504313c5)
+- [Compiler Pipeline](https://www.notion.so/248fde4bf3a2812ea12bc52421240543)
+- [Runtime Integration](https://www.notion.so/249fde4bf3a2813ea115d9731d09706e)
+- [Next Steps Dashboard (Kanban)](https://www.notion.so/a5b6038e1d06457ba2c97032d0da8e79)
+
+## Quick Start
+
+```bash
+# Install dependencies, build, and setup PATH automatically
+python3 tools/setup/carts-setup.py
+
+# Build project
+carts build
+
+# Complete pipeline from C++ to executable
+carts execute simple.cpp -o simple
+```
+
+Notes:
+- Always use the `carts` wrapper for all operations (conversion, optimization, lowering, compile/link).
+- Project build uses system clang; ARTS operations use the installed LLVM toolchain.
+- The setup script automatically adds `carts` to your PATH.
+
+## Contributing
+- Track work in the [Next Steps Dashboard](https://www.notion.so/a5b6038e1d06457ba2c97032d0da8e79)
 
 ---
 
-## Running an Example (Benchmarking & Profiling)
-1. **Activate your environment and ensure dependencies are built.**
-2. **Run the benchmarking tool:**
-
-```bash
-python3 carts_test.py \
-  --example_base_dirs tasking \
-  --output_prefix performance \
-  --target_examples matrixmul \
-  --timeout_seconds 300 \
-  --profiling True
-```
-
-- This will benchmark and profile all examples found in the specified directories.
-- To run only specific examples, add `--target_examples addition dotproduct` (space-separated names).
-- To disable profiling, use `--profiling False`.
-- To customize perf events, use `--perf_events instructions cycles L1-dcache-loads ...`.
-
-3. **Results:**
-   - Output files are saved in the `output/` directory:
-     - `performance_results.json` (all results)
-     - `performance_report.csv` (timing)
-     - `performance_profiling_report.csv` (perf counters)
-     - Plots and PDFs in `output/images/` and `output/pdfs/`
-
-4. **View Interactive Report:**
-
-```bash
-python3 examples/interactive_report.py
-```
-- Open your browser to `http://localhost:8050` to explore results, profiling tables, and graphs interactively.
-- Use the Profiling Results tab to filter by example, threads, problem size, args, and to view advanced metrics (MPKI, CPI, IPC, bandwidth, miss rates, stalls/instr, etc).
-
----
+**Author**: Rafael Andres Herrera Guaitero  
+**Email**: <rafaelhg@udel.edu>

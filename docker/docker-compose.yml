@@ -1,0 +1,32 @@
+services:
+  arts-node-1:
+    image: arts-node:built
+    hostname: arts-node-1
+    container_name: arts-node-1
+    environment:
+      - ARTS_NODE_ID=0
+    command: ["/usr/sbin/sshd", "-D"]
+
+  arts-node-2:
+    image: arts-node:built
+    hostname: arts-node-2
+    container_name: arts-node-2
+    environment:
+      - ARTS_NODE_ID=1
+    command: ["/usr/sbin/sshd", "-D"]
+
+  arts-node-3:
+    image: arts-node:built
+    hostname: arts-node-3
+    container_name: arts-node-3
+    environment:
+      - ARTS_NODE_ID=2
+    command: ["/usr/sbin/sshd", "-D"]
+
+  arts-node-4:
+    image: arts-node:built
+    hostname: arts-node-4
+    container_name: arts-node-4
+    environment:
+      - ARTS_NODE_ID=3
+    command: ["/usr/sbin/sshd", "-D"]

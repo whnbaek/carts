@@ -7,9 +7,6 @@
 #ifndef CARTS_ANALYSIS_LOOPANALYSIS_H
 #define CARTS_ANALYSIS_LOOPANALYSIS_H
 
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/BuiltinAttributes.h"
 /// Dialects
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -61,6 +58,16 @@ public:
   /// For a given operation, collect enclosing loops
   void collectEnclosingLoops(Operation *op,
     SmallVectorImpl<LoopInfo *> &enclosingLoops);
+
+  /// Collect loops whose induction variables affect the given operation's
+  /// operands. The returned vector contains unique loop operations.
+  void collectAffectingLoops(Operation *op,
+    SmallVectorImpl<Operation *> &affectingLoops);
+
+  /// Collect loops whose induction variables affect the given SSA value.
+  /// The returned vector contains loop operations that the value depends on.
+  void collectAffectingLoops(Value val,
+    SmallVectorImpl<Operation *> &affectingLoops);
 
 private:
   ModuleOp module;

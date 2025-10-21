@@ -1,3 +1,0 @@
-export ARTS_PATH=/Users/randreshg/Documents/carts/.install/arts
-export PATH=/Users/randreshg/Documents/carts/.install/carts/bin:/Users/randreshg/Documents/carts/.install/polygeist/bin:/Users/randreshg/Documents/carts/.install/llvm/bin:$PATH
-export LD_LIBRARY_PATH=/Users/randreshg/Documents/carts/.install/carts/lib:/Users/randreshg/Documents/carts/.install/polygeist/lib:/Users/randreshg/Documents/carts/.install/arts/lib:/Users/randreshg/Documents/carts/.install/llvm/lib:$LD_LIBRARY_PATH

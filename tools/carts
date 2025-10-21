@@ -1,0 +1,1486 @@
+#!/bin/bash
+
+# CARTS Wrapper Script
+# Automatically adds necessary include paths and library paths for CARTS compilation
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source common print functions
+source "${SCRIPT_DIR}/config/carts-print.sh"
+
+# Determine if we're running from the installed location or the source location
+if [[ "$SCRIPT_DIR" == *"/.install/carts/bin" ]]; then
+    # We're running from the installed location
+    # Go up 3 levels: bin -> carts -> .install -> project root
+    CARTS_DIR="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+else
+    # We're running from the source location
+    CARTS_DIR="$(dirname "$SCRIPT_DIR")"
+fi
+
+# Define paths
+INSTALL_DIR="${CARTS_DIR}/.install"
+LLVM_INSTALL_DIR="${INSTALL_DIR}/llvm"
+POLYGEIST_INSTALL_DIR="${INSTALL_DIR}/polygeist"
+ARTS_INSTALL_DIR="${INSTALL_DIR}/arts"
+CARTS_INSTALL_DIR="${INSTALL_DIR}/carts"
+LLVM_INCLUDE_PATH="${LLVM_INSTALL_DIR}/lib/clang/18/include"
+# Detect LLVM library path
+if [[ -d "${LLVM_INSTALL_DIR}/lib/aarch64-unknown-linux-gnu" ]]; then
+    LLVM_LIB_PATH="${LLVM_INSTALL_DIR}/lib/aarch64-unknown-linux-gnu"
+elif [[ -d "${LLVM_INSTALL_DIR}/lib/x86_64-unknown-linux-gnu" ]]; then
+    LLVM_LIB_PATH="${LLVM_INSTALL_DIR}/lib/x86_64-unknown-linux-gnu"
+else
+    LLVM_LIB_PATH="${LLVM_INSTALL_DIR}/lib"
+fi
+# macOS specific paths
+MACOS_SDK_PATH="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+
+# Platform configuration variables populated during initialization
+CARTS_HOST_OS=""
+CARTS_HOST_ARCH="$(uname -m 2>/dev/null || echo unknown)"
+SYSTEM_INCLUDE_PATH=""
+SYSTEM_CXX_INCLUDE_PATH=""
+CARTS_INCLUDE_FLAGS=()
+CARTS_CGEIST_SYSROOT_FLAGS=()
+CARTS_CLANG_SYSROOT_FLAGS=()
+CARTS_CLANG_LIBRARY_FLAGS=()
+CARTS_COMPILE_LIBRARY_FLAGS=()
+CARTS_CLANG_LIBRARIES=()
+CARTS_COMPILE_LIBRARIES=()
+CARTS_COMPILE_FLAGS=()
+CARTS_LINKER_FLAGS=()
+
+# Function to detect host configuration and populate shared flags
+detect_host_config() {
+    # Reset configurable arrays to ensure clean reinitialization
+    CARTS_INCLUDE_FLAGS=(
+        # OpenMP and clang resource headers
+        "-I${LLVM_INCLUDE_PATH}"
+    )
+
+    CARTS_CLANG_LIBRARY_FLAGS=()
+    CARTS_COMPILE_LIBRARY_FLAGS=()
+    CARTS_CLANG_LIBRARY_FLAGS+=(
+        # ARTS runtime libraries
+        "-L${ARTS_INSTALL_DIR}/lib"
+        # LLVM target-specific libraries
+        "-L${LLVM_LIB_PATH}"
+        # LLVM libraries
+        "-L${LLVM_INSTALL_DIR}/lib"
+    )
+    CARTS_COMPILE_LIBRARY_FLAGS+=(
+        # ARTS runtime libraries
+        "-L${ARTS_INSTALL_DIR}/lib"
+        # LLVM target-specific libraries
+        "-L${LLVM_LIB_PATH}"
+        # LLVM libraries
+        "-L${LLVM_INSTALL_DIR}/lib"
+    )
+
+    CARTS_CLANG_LIBRARIES=(
+        # C++ standard library
+        "-lc++"
+        # C++ ABI library
+        "-lc++abi"
+        # Unwind library
+        "-lunwind"
+    )
+
+    CARTS_COMPILE_LIBRARIES=(
+        # ARTS runtime
+        "-larts"
+        # OpenMP runtime
+        "-lomp"
+        # C++ standard library
+        "-lc++"
+        # C++ ABI library
+        "-lc++abi"
+        # Unwind library
+        "-lunwind"
+    )
+
+    CARTS_COMPILE_FLAGS=(
+        # Default optimization level
+        "-O3"
+    )
+
+    CARTS_CGEIST_SYSROOT_FLAGS=()
+    CARTS_CLANG_SYSROOT_FLAGS=()
+
+    case "$OSTYPE" in
+        darwin*)
+            CARTS_HOST_OS="macos"
+            SYSTEM_INCLUDE_PATH="${MACOS_SDK_PATH}/usr/include"
+            SYSTEM_CXX_INCLUDE_PATH="${MACOS_SDK_PATH}/usr/include/c++/v1"
+            CARTS_INCLUDE_FLAGS+=(
+                # System C headers from SDK
+                "-I${SYSTEM_INCLUDE_PATH}"
+                # System libc++ headers from SDK
+                "-I${SYSTEM_CXX_INCLUDE_PATH}"
+            )
+            CARTS_CGEIST_SYSROOT_FLAGS=(
+                # cgeist expects --sysroot on macOS
+                "--sysroot" "${MACOS_SDK_PATH}"
+            )
+            CARTS_CLANG_SYSROOT_FLAGS=(
+                # clang uses -isysroot on macOS
+                "-isysroot" "${MACOS_SDK_PATH}"
+            )
+            CARTS_CLANG_LIBRARY_FLAGS+=(
+                # Linker runtime search path for ARTS
+                "-Wl,-rpath,${ARTS_INSTALL_DIR}/lib"
+                # Linker runtime search path for LLVM
+                "-Wl,-rpath,${LLVM_INSTALL_DIR}/lib"
+            )
+            CARTS_COMPILE_LIBRARY_FLAGS+=(
+                # Linker runtime search path for ARTS
+                "-Wl,-rpath,${ARTS_INSTALL_DIR}/lib"
+                # Linker runtime search path for LLVM
+                "-Wl,-rpath,${LLVM_INSTALL_DIR}/lib"
+            )
+            if [[ "$CARTS_HOST_ARCH" == "x86_64" ]]; then
+                CARTS_COMPILE_FLAGS+=(
+                    # Force non-PIE output on x86_64 builds
+                    "-fno-pie"
+                    "-Wl,-no_pie"
+                )
+            fi
+            ;;
+        linux-gnu*|linux-musl*|linux*)
+            CARTS_HOST_OS="linux"
+            SYSTEM_INCLUDE_PATH="/usr/include"
+            SYSTEM_CXX_INCLUDE_PATH="/usr/include/c++/v1"
+            CARTS_INCLUDE_FLAGS+=(
+                # System C headers
+                "-I${SYSTEM_INCLUDE_PATH}"
+                # System libc++ headers
+                "-I${SYSTEM_CXX_INCLUDE_PATH}"
+            )
+            CARTS_CLANG_LIBRARY_FLAGS+=(
+                # Linker runtime search path for ARTS
+                "-Wl,-rpath,${ARTS_INSTALL_DIR}/lib"
+                # Linker runtime search path for LLVM
+                "-Wl,-rpath,${LLVM_INSTALL_DIR}/lib"
+            )
+            CARTS_COMPILE_LIBRARY_FLAGS+=(
+                # Linker runtime search path for ARTS
+                "-Wl,-rpath,${ARTS_INSTALL_DIR}/lib"
+                # Linker runtime search path for LLVM
+                "-Wl,-rpath,${LLVM_INSTALL_DIR}/lib"
+                # System library directories
+                "-L/usr/lib"
+                "-L/usr/lib64"
+            )
+            CARTS_CLANG_LIBRARIES+=(
+                # POSIX threading library
+                "-lpthread"
+                # POSIX realtime library
+                "-lrt"
+            )
+            CARTS_COMPILE_LIBRARIES+=(
+                # POSIX threading library
+                "-lpthread"
+                # POSIX realtime library
+                "-lrt"
+            )
+            CARTS_COMPILE_FLAGS+=(
+                # Force non-PIE output on Linux
+                "-fno-pie"
+                "-no-pie"
+            )
+            ;;
+        msys*|cygwin*|mingw*|win32*)
+            CARTS_HOST_OS="windows"
+            local sdk_dir="${WindowsSdkDir:-${WINDOWSSDKDIR:-}}"
+            local sdk_version="${WindowsSDKVersion:-${WINDOWSSDKVERSION:-}}"
+            local vc_tools_dir="${VCToolsInstallDir:-}"
+            local arch="${CARTS_WINDOWS_ARCH:-x64}"
+
+            if [[ -z "$sdk_dir" || -z "$sdk_version" ]]; then
+                carts_error "Windows SDK environment not detected. Please run inside a Visual Studio developer command prompt or set WindowsSdkDir and WindowsSDKVersion."
+                exit 1
+            fi
+
+            if [[ -z "$vc_tools_dir" ]]; then
+                carts_error "VCToolsInstallDir is not set. Please run inside a Visual Studio developer command prompt."
+                exit 1
+            fi
+
+            sdk_dir="${sdk_dir%/}"
+            sdk_version="${sdk_version%/}"
+            vc_tools_dir="${vc_tools_dir%/}"
+
+            SYSTEM_INCLUDE_PATH="${sdk_dir}/Include/${sdk_version}/ucrt"
+            SYSTEM_CXX_INCLUDE_PATH="${vc_tools_dir}/include"
+
+            if [[ ! -d "${SYSTEM_CXX_INCLUDE_PATH}" ]]; then
+                carts_error "MSVC include directory not found at ${SYSTEM_CXX_INCLUDE_PATH}"
+                exit 1
+            fi
+
+            if [[ ! -d "${sdk_dir}/Include/${sdk_version}" ]]; then
+                carts_error "Windows SDK headers not found at ${sdk_dir}/Include/${sdk_version}"
+                exit 1
+            fi
+
+            CARTS_INCLUDE_FLAGS+=(
+                # Windows SDK universal CRT headers
+                "-I${sdk_dir}/Include/${sdk_version}/ucrt"
+                # Windows SDK shared headers
+                "-I${sdk_dir}/Include/${sdk_version}/shared"
+                # Windows SDK UM headers
+                "-I${sdk_dir}/Include/${sdk_version}/um"
+                # MSVC standard library headers
+                "-I${vc_tools_dir}/include"
+            )
+
+            CARTS_CLANG_LIBRARY_FLAGS+=(
+                # Windows SDK universal CRT libraries
+                "-L${sdk_dir}/Lib/${sdk_version}/ucrt/${arch}"
+                # Windows SDK UM libraries
+                "-L${sdk_dir}/Lib/${sdk_version}/um/${arch}"
+                # MSVC toolchain libraries
+                "-L${vc_tools_dir}/lib/${arch}"
+            )
+
+            CARTS_COMPILE_LIBRARY_FLAGS+=(
+                # Windows SDK universal CRT libraries
+                "-L${sdk_dir}/Lib/${sdk_version}/ucrt/${arch}"
+                # Windows SDK UM libraries
+                "-L${sdk_dir}/Lib/${sdk_version}/um/${arch}"
+                # MSVC toolchain libraries
+                "-L${vc_tools_dir}/lib/${arch}"
+            )
+
+            if [[ ! -d "${sdk_dir}/Lib/${sdk_version}/ucrt/${arch}" || ! -d "${sdk_dir}/Lib/${sdk_version}/um/${arch}" ]]; then
+                carts_error "Windows SDK libraries not found for architecture ${arch} under ${sdk_dir}/Lib/${sdk_version}"
+                exit 1
+            fi
+
+            if [[ ! -d "${vc_tools_dir}/lib/${arch}" ]]; then
+                carts_error "MSVC toolchain libraries not found at ${vc_tools_dir}/lib/${arch}"
+                exit 1
+            fi
+
+            # Windows builds rely on MSVC runtime, so remove libc++ specific libraries
+            CARTS_CLANG_LIBRARIES=()
+            CARTS_COMPILE_LIBRARIES=(
+                # ARTS runtime
+                "-larts"
+                # OpenMP runtime
+                "-lomp"
+            )
+            CARTS_COMPILE_FLAGS+=(
+                # Suppress linker banner noise on Windows
+                "-Xlinker" "/NOLOGO"
+            )
+            ;;
+        *)
+            carts_error "Unsupported OS: $OSTYPE"
+            exit 1
+            ;;
+    esac
+
+    CARTS_INCLUDE_FLAGS+=(
+        # ARTS runtime headers
+        "-I${ARTS_INSTALL_DIR}/include"
+        # LLVM includes
+        "-I${LLVM_INSTALL_DIR}/include"
+    )
+}
+
+# Function to detect and configure appropriate linker
+detect_linker_config() {
+    local linker_type=""
+    local linker_path=""
+    CARTS_LINKER_FLAGS=()
+    
+    # Check if we have an installed lld
+    case "$CARTS_HOST_OS" in
+        macos)
+            if [[ -f "${LLVM_INSTALL_DIR}/bin/ld64.lld" ]]; then
+                linker_type="lld"
+                linker_path="${LLVM_INSTALL_DIR}/bin/ld64.lld"
+            elif [[ -f "${LLVM_INSTALL_DIR}/bin/lld" ]]; then
+                linker_type="lld"
+                linker_path="${LLVM_INSTALL_DIR}/bin/lld"
+            fi
+            ;;
+        linux)
+            if [[ -f "${LLVM_INSTALL_DIR}/bin/ld.lld" ]]; then
+                linker_type="lld"
+                linker_path="${LLVM_INSTALL_DIR}/bin/ld.lld"
+            elif [[ -f "${LLVM_INSTALL_DIR}/bin/lld" ]]; then
+                linker_type="lld"
+                linker_path="${LLVM_INSTALL_DIR}/bin/lld"
+            fi
+            ;;
+        windows)
+            if [[ -f "${LLVM_INSTALL_DIR}/bin/lld-link.exe" ]]; then
+                linker_type="lld-link"
+                linker_path="${LLVM_INSTALL_DIR}/bin/lld-link.exe"
+            elif [[ -f "${LLVM_INSTALL_DIR}/bin/lld-link" ]]; then
+                linker_type="lld-link"
+                linker_path="${LLVM_INSTALL_DIR}/bin/lld-link"
+            fi
+            ;;
+        *)
+            ;;
+    esac
+
+    if [[ -n "$linker_path" ]]; then
+        if [[ "$CARTS_HOST_OS" == "windows" ]]; then
+            CARTS_LINKER_FLAGS+=("-fuse-ld=lld")
+            CARTS_LINKER_FLAGS+=("--ld-path=${linker_path}")
+        else
+            CARTS_LINKER_FLAGS+=("--ld-path=${linker_path}")
+        fi
+    fi
+    
+    # Export linker configuration for use by other functions
+    export CARTS_LINKER_TYPE="$linker_type"
+    export CARTS_LINKER_PATH="$linker_path"
+    
+    if [[ -n "$CARTS_VERBOSE" && -n "$linker_type" ]]; then
+        carts_debug "Detected linker: $linker_type at $linker_path"
+    fi
+}
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 <command> [options]"
+    echo ""
+    echo "Commands:"
+    carts_cmd "build [options]"             "Build CARTS project using system clang"
+    carts_cmd "cgeist <file> [options]"     "Run cgeist with automatic include paths"
+    carts_cmd "clang <file> [options]"      "Compile C/C++ with LLVM clang and OpenMP"
+    carts_cmd "run [options]"               "Run CARTS MLIR transformations"
+    carts_cmd "mlir-translate <file> [options]" "Run mlir-translate"
+    carts_cmd "compile <file> [options]"    "Compile with ARTS runtime"
+    carts_cmd "visualize <mlir> [options]"  "Export ARTS graphs or launch visualizer UI"
+    carts_cmd "benchmark [options]"         "Run CARTS benchmarks"
+    carts_cmd "setup [options]"             "Set up CARTS environment"
+    carts_cmd "clean [options]"              "Clean generated files in current directory"
+    carts_cmd "check [options]"             "Run CARTS test suite using llvm-lit"
+    carts_cmd "execute <file> [options]"    "Complete pipeline: C++ -> executable"
+    
+    echo ""
+    echo "Pipeline Options (for 'run' command):"
+    carts_cmd "--complete"                   "Run complete pipeline (default)"
+    carts_cmd "--simplify"                   "Stop after initial cleanup and simplification"
+    carts_cmd "--arts-inliner"               "Stop after ARTS inliner"
+    carts_cmd "--convert-openmp"             "Stop after OpenMP conversion"
+    carts_cmd "--edt-transforms"             "Stop after EDT transformations"
+    carts_cmd "--edt-lowering"               "Stop after EDT lowering"
+    carts_cmd "--datablock"                  "Stop after datablock creation and optimization"
+    carts_cmd "--epochs"                     "Stop after epoch creation"
+    carts_cmd "--arts-to-llvm"               "Stop after ARTS to LLVM conversion"
+    carts_cmd "--emit-llvm"                  "Emit LLVM IR output (can be used with any stage)"
+    carts_cmd "-g"                           "Enable MLIR/LLVM debug info emission during run"
+    
+    echo ""
+    echo "Execute Options (for 'execute' command):"
+    carts_cmd "--run-args <args>"               "Pass additional arguments to carts run command"
+    carts_cmd "--compile-args <args>"           "Pass additional arguments to carts compile command"
+    carts_cmd "-g"                               "Generate debug symbols (propagates to all stages)"
+
+    echo ""
+    echo "Compile Options (for 'compile' command):"
+    carts_cmd "-g"                               "Embed DWARF debug symbols in the final binary"
+    
+    echo ""
+    echo "Examples:"
+    echo "  # Build commands"
+    carts_cmd "carts build"                                 "Build CARTS project (default)"
+    carts_cmd "carts build --clean"                         "Clean and build"
+    carts_cmd "carts build --arts"                          "Build only ARTS components"
+    carts_cmd "carts build --arts --info"                   "Build ARTS with info-level debugging"
+    carts_cmd "carts build --arts --debug"                  "Build ARTS with debug build and logging"
+    carts_cmd "carts build --arts --introspection"          "Build ARTS with introspection and counters"
+    carts_cmd "carts build --arts --info --introspection"   "Build ARTS with info+introspection"
+    carts_cmd "carts build --polygeist"                     "Build only Polygeist"
+    carts_cmd "carts build --llvm"                          "Build only LLVM"
+    carts_cmd "carts build --docker"                        "Build Docker image
+    
+    echo ""
+    echo "  # Compilation pipeline"
+    carts_cmd "carts cgeist simple.cpp -std=c++17 -fopenmp -O0 -S"              "Convert C++ to MLIR"
+    carts_cmd "carts clang simple.cpp -fopenmp -o simple"                       "Compile C++ with OpenMP directly"
+    carts_cmd "carts run simple.mlir --complete --emit-llvm"                    "Full pipeline to LLVM"
+    carts_cmd "carts compile simple.ll -o simple"                               "Compile LLVM to executable"
+    carts_cmd "carts execute simple.cpp -o simple"                              "Complete pipeline: C++ to executable"
+    carts_cmd "carts execute simple.cpp --run-args --export-json -o simple"     "Pipeline with JSON export"
+    carts_cmd "carts execute simple.cpp --run-args --debug-only=db -o simple"   "Pipeline with debug flags"
+    carts_cmd "carts execute simple.cpp --compile-args -lm -lpthread -o simple" "Pipeline with library dependencies"
+    
+    echo ""
+    echo "  # Development and testing"
+    carts_cmd "carts run --help"                "Show pipeline options"
+    carts_cmd "carts check"                     "Run all CARTS tests"
+    carts_cmd "carts check --suite arts"        "Run only ARTS tests"
+    carts_cmd "carts clean"                     "Clean generated files"
+    carts_cmd "carts clean --docker"            "Clean Docker containers and images"
+    
+    echo ""
+    echo "  # Environment setup"
+    carts_cmd "carts setup"                     "Setup CARTS environment"
+    carts_cmd "carts setup --add-to-path"       "Add carts to PATH"
+    carts_cmd "carts setup --deps-only"         "Install dependencies only"
+    
+    echo ""
+    echo "  # Benchmarking"
+    carts_cmd "carts benchmark --target_examples matrixmul" "Run matrix multiplication benchmark"
+
+    echo ""
+    echo "  # Docker operations"
+    carts_cmd "carts docker --update [options]"              "Rebuild image via docker/docker-update.sh (requires clean repos)"
+    carts_cmd "carts docker --run example.c -- 100 10"       "Start nodes cluster and run example with runtime args"
+    carts_cmd "carts docker --kill"                          "Kill all processes in running ARTS containers"
+    
+    echo ""
+    echo "Environment variables:"
+    echo "  CARTS_INSTALL_DIR - Override installation directory (default: .install)"
+    echo "  CARTS_VERBOSE - Enable verbose output"
+    echo ""
+}
+
+# Function to run cgeist with automatic include paths
+run_cgeist() {
+    local input_file="$1"
+    shift
+    
+    if [[ ! -f "$input_file" ]]; then
+        carts_error "Input file '$input_file' not found"
+        exit 1
+    fi
+    
+    # Use shared include and sysroot configuration populated during host detection
+    local include_paths=("${CARTS_INCLUDE_FLAGS[@]}")
+    local extra_cflags=("${CARTS_CGEIST_SYSROOT_FLAGS[@]}")
+    
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running cgeist with include paths:"
+        printf "  %s\n" "${include_paths[@]}"
+        if [[ ${#extra_cflags[@]} -gt 0 ]]; then
+            carts_debug "Additional cgeist flags: ${extra_cflags[*]}"
+        fi
+        carts_debug "Command: ${POLYGEIST_INSTALL_DIR}/bin/cgeist ${include_paths[*]} ${extra_cflags[*]} $input_file $*"
+    fi
+    
+    "${POLYGEIST_INSTALL_DIR}/bin/cgeist" "${include_paths[@]}" "${extra_cflags[@]}" "$input_file" "$@"
+}
+
+
+# Function to run clang with automatic include and library paths
+run_clang() {
+    local input_file="$1"
+    shift
+
+    if [[ ! -f "$input_file" ]]; then
+        carts_error "Input file '$input_file' not found"
+        exit 1
+    fi
+
+    # Use installed LLVM clang
+    local clang_path="${LLVM_INSTALL_DIR}/bin/clang"
+    if [[ ! -f "$clang_path" ]]; then
+        carts_error "LLVM clang not found at $clang_path"
+        carts_info "Please ensure LLVM is properly installed"
+        exit 1
+    fi
+
+    # Use shared include, library, sysroot, and linker configuration
+    local include_paths=("${CARTS_INCLUDE_FLAGS[@]}")
+    local sysroot_flags=("${CARTS_CLANG_SYSROOT_FLAGS[@]}")
+    local library_paths=("${CARTS_CLANG_LIBRARY_FLAGS[@]}")
+    local linker_flags=("${CARTS_LINKER_FLAGS[@]}")
+    local libraries=("${CARTS_CLANG_LIBRARIES[@]}")
+
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running LLVM clang with:"
+        carts_debug "Include paths: ${include_paths[*]}"
+        if [[ ${#sysroot_flags[@]} -gt 0 ]]; then
+            carts_debug "Sysroot flags: ${sysroot_flags[*]}"
+        fi
+        carts_debug "Library and linker flags: ${library_paths[*]} ${linker_flags[*]}"
+        carts_debug "Libraries: ${libraries[*]}"
+        carts_debug "Command: ${clang_path} ${include_paths[*]} ${sysroot_flags[*]} ${library_paths[*]} ${linker_flags[*]} -fopenmp $input_file ${libraries[*]} $*"
+    fi
+
+    "${clang_path}" "${include_paths[@]}" "${sysroot_flags[@]}" "${library_paths[@]}" "${linker_flags[@]}" -fopenmp "$input_file" "${libraries[@]}" "$@"
+}
+
+
+# Function to run carts-run (the C++ executable)
+run_run() {
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running carts-run: ${CARTS_INSTALL_DIR}/bin/carts-run $*"
+    fi
+
+    "${CARTS_INSTALL_DIR}/bin/carts-run" "$@"
+}
+
+# Function to run mlir-translate
+run_mlir_translate() {
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running mlir-translate: ${LLVM_INSTALL_DIR}/bin/mlir-translate $*"
+    fi
+    
+    "${LLVM_INSTALL_DIR}/bin/mlir-translate" "$@"
+}
+
+# Function to compile with ARTS runtime
+run_compile() {
+    local input_file="$1"
+    shift
+    
+    # Handle help flag
+    if [[ "$input_file" == "--help" || "$input_file" == "-h" ]]; then
+        carts_info "Compile options:"
+        carts_info "  <input_file>        Input LLVM IR file (.ll)"
+        carts_info "  -o <output>         Output executable name"
+        carts_info "  -g                  Embed DWARF debug symbols in the final binary"
+        carts_info "  --help, -h          Show this help"
+        carts_info ""
+        carts_info "Examples:"
+        carts_info "  carts compile simple.ll -o simple"
+        carts_info "  carts compile simple.ll -o simple -g"
+        exit 0
+    fi
+    
+    if [[ ! -f "$input_file" ]]; then
+        carts_error "Input file '$input_file' not found"
+        exit 1
+    fi
+    
+    # Use installed LLVM clang for ARTS operations
+    local clang_path="${LLVM_INSTALL_DIR}/bin/clang"
+    if [[ ! -f "$clang_path" ]]; then
+        carts_error "LLVM clang not found at $clang_path"
+        carts_info "Please ensure LLVM is properly installed"
+        exit 1
+    fi
+    
+    # Reuse host-specific configuration collected earlier
+    local library_paths=("${CARTS_COMPILE_LIBRARY_FLAGS[@]}")
+    local libraries=("${CARTS_COMPILE_LIBRARIES[@]}")
+    local sysroot_flags=("${CARTS_CLANG_SYSROOT_FLAGS[@]}")
+    local linker_flags=("${CARTS_LINKER_FLAGS[@]}")
+    
+    # Build compile flags and force non-PIE output when required so function
+    # pointers remain stable across nodes (required for remote EDT execution).
+    local compile_flags=("${CARTS_COMPILE_FLAGS[@]}")
+
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running LLVM clang with compile flags:"
+        printf "  %s\n" "${compile_flags[@]}"
+        if [[ ${#sysroot_flags[@]} -gt 0 ]]; then
+            carts_debug "Sysroot flags:"
+            printf "  %s\n" "${sysroot_flags[@]}"
+        fi
+        carts_debug "Library and linker flags:"
+        local combined_flags=("${library_paths[@]}" "${linker_flags[@]}")
+        printf "  %s\n" "${combined_flags[@]}"
+        carts_debug "Libraries:"
+        printf "  %s\n" "${libraries[@]}"
+        if [[ -n "$CARTS_LINKER_PATH" ]]; then
+            carts_debug "Using linker: $CARTS_LINKER_PATH"
+        fi
+        carts_debug "Command: $clang_path ${compile_flags[*]} ${sysroot_flags[*]} ${library_paths[*]} ${linker_flags[*]} ${libraries[*]} $input_file $*"
+    fi
+    
+    "$clang_path" "${compile_flags[@]}" "${sysroot_flags[@]}" "${library_paths[@]}" "${linker_flags[@]}" "${libraries[@]}" "$input_file" "$@"
+}
+
+# Function to run benchmark tool
+run_benchmark() {
+    local benchmark_script="${CARTS_DIR}/tools/benchmark/carts-benchmark.py"
+    if [[ ! -f "$benchmark_script" ]]; then
+        carts_error "Benchmark script not found at $benchmark_script"
+        exit 1
+    fi
+
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running benchmark: python3 $benchmark_script $*"
+    fi
+
+    python3 "$benchmark_script" "$@"
+}
+
+
+# Function to run visualizer tool
+run_visualize() {
+    local server_dir="${CARTS_DIR}/tools/visualizer/server"
+    # Detect --serve flag
+    local serve_mode=false
+    local args=("$@")
+    for a in "$@"; do
+        if [[ "$a" == "--serve" ]]; then
+            serve_mode=true
+            break
+        fi
+    done
+
+    # If first arg is a .mlir file and --serve given, export JSON to server dir and launch UI
+    if [[ -f "$1" && "$1" == *.mlir && "$serve_mode" == true ]]; then
+        shift # remove mlir path from args for exporter capture
+        local mlir_file="$1" # actually after shift we lost it; restore
+    fi
+
+    if [[ -f "$1" && "$1" == *.mlir ]]; then
+        local mlir_file="$1"; shift
+        local out_json="${server_dir}/graph.json"
+        if [[ -n "$CARTS_VERBOSE" ]]; then
+            carts_debug "Exporting JSON: ${CARTS_INSTALL_DIR}/bin/carts-visualizer $mlir_file --json -o $out_json $*"
+        fi
+        "${CARTS_INSTALL_DIR}/bin/carts-visualizer" "$mlir_file" --json -o "$out_json" "$@"
+        if [[ "$serve_mode" == true ]]; then
+            if [[ -n "$CARTS_VERBOSE" ]]; then
+                carts_debug "Launching visualizer UI server: python3 ${server_dir}/app.py"
+            fi
+            python3 "${server_dir}/app.py"
+        fi
+    else
+        if [[ -n "$CARTS_VERBOSE" ]]; then
+            carts_debug "Launching visualizer UI server: python3 ${server_dir}/app.py $*"
+        fi
+        python3 "${server_dir}/app.py" "$@"
+    fi
+}
+
+# Function to build CARTS project using system clang
+run_build() {
+    carts_header "CARTS Build"
+    carts_print "Building CARTS project using system clang"
+    
+    # Check if we're in the right directory
+    if [[ ! -f "${CARTS_DIR}/Makefile" ]]; then
+        carts_error "Makefile not found. Are you in the CARTS project root?"
+        exit 1
+    fi
+    
+    # Parse build options
+    local clean_build=false
+    local build_target="build"
+    local docker_build=false
+    local arts_debug_level="none"
+    local arts_build_type="Release"
+    local arts_introspection=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            "--clean"|"-c")
+                clean_build=true
+                shift
+                ;;
+            "--arts"|"-a")
+                build_target="arts"
+                shift
+                ;;
+            "--introspection"|"-i")
+                arts_introspection=true
+                shift
+                ;;
+            "--info")
+                arts_debug_level="info"
+                shift
+                ;;
+            "--debug")
+                arts_debug_level="debug"
+                arts_build_type="Debug"
+                shift
+                ;;
+            "--polygeist"|"-p")
+                build_target="polygeist"
+                shift
+                ;;
+            "--llvm"|"-l")
+                build_target="llvm"
+                shift
+                ;;
+            "--docker"|"-d")
+                docker_build=true
+                shift
+                ;;
+            "--help"|"-h")
+                carts_print "Build options:"
+                carts_print "  (default)       Build CARTS project (make build)"
+                carts_print "  --clean, -c     Clean build (make clean && make build)"
+                carts_print "  --arts, -a      Build only ARTS components"
+                carts_print "  --introspection, -i  Enable ARTS introspection and counters (use with --arts)"
+                carts_print "  --info           Enable info-level debugging (use with --arts)"
+                carts_print "  --debug          Enable debug build with debug+info logging (use with --arts)"
+                carts_print "  --polygeist, -p Build only Polygeist (make polygeist)"
+                carts_print "  --llvm, -l      Build only LLVM (make llvm)"
+                carts_print "  --docker, -d    Build Docker image (docker/docker-build.sh)"
+                carts_print "  --help, -h      Show this help"
+                exit 0
+                ;;
+            *)
+                carts_error "Unknown build option: $1"
+                carts_print "Use --help for available options"
+                exit 1
+                ;;
+        esac
+    done
+    
+    # Change to project directory
+    cd "${CARTS_DIR}"
+    
+    if [[ "$clean_build" == "true" ]]; then
+        if [[ -n "$CARTS_VERBOSE" ]]; then
+            carts_debug "Cleaning build..."
+        fi
+        if [[ "$docker_build" == "true" ]]; then
+            local docker_dir="${CARTS_DIR}/docker"
+            if [[ ! -d "$docker_dir" ]]; then
+                carts_error "Docker directory not found at $docker_dir"
+                exit 1
+            fi
+            if [[ -n "$CARTS_VERBOSE" ]]; then
+                carts_debug "Running Docker clean script: $docker_dir/docker-clean.sh"
+            fi
+            (cd "$docker_dir" && ./docker-clean.sh)
+        else
+            make clean
+        fi
+    fi
+
+    # Build make command with variables
+    local make_vars=""
+    if [[ "$arts_introspection" == "true" ]]; then
+        make_vars="$make_vars ARTS_USE_COUNTERS=ON ARTS_USE_METRICS=ON"
+    fi
+
+    # Handle debug level flags
+    case "$arts_debug_level" in
+        "info")
+            make_vars="$make_vars ARTS_INFO_ENABLED=ON"
+            ;;
+        "debug")
+            make_vars="$make_vars ARTS_DEBUG_ENABLED=ON ARTS_INFO_ENABLED=ON"
+            ;;
+    esac
+
+    if [[ "$arts_build_type" != "Release" ]]; then
+        make_vars="$make_vars ARTS_BUILD_TYPE=$arts_build_type"
+    fi
+
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        if [[ "$docker_build" == "true" ]]; then
+            carts_debug "Running Docker build script: ${CARTS_DIR}/docker/docker-build.sh"
+        else
+            carts_debug "Running: make $make_vars $build_target"
+        fi
+    fi
+
+    if [[ "$docker_build" == "true" ]]; then
+        local docker_dir="${CARTS_DIR}/docker"
+        if [[ ! -d "$docker_dir" ]]; then
+            carts_error "Docker directory not found at $docker_dir"
+            exit 1
+        fi
+        (cd "$docker_dir" && ./docker-build.sh)
+    else
+        if [[ -n "$make_vars" ]]; then
+            make $make_vars "$build_target"
+        else
+            make "$build_target"
+        fi
+    fi
+    
+    if [[ $? -eq 0 ]]; then
+        carts_header "Build Complete"
+        carts_success "CARTS build completed successfully!"
+        if [[ "$docker_build" == "true" ]]; then
+            carts_success "Docker build completed"
+        fi
+    else
+        carts_header "Build Failed"
+        carts_error "CARTS build failed!"
+        exit 1
+    fi
+}
+
+# Function to run setup tool
+run_setup() {
+    local setup_script="${CARTS_DIR}/tools/setup/carts-setup.py"
+    if [[ ! -f "$setup_script" ]]; then
+        carts_error "Setup script not found at $setup_script"
+        exit 1
+    fi
+    
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running setup: python3 $setup_script $*"
+    fi
+    
+    python3 "$setup_script" "$@"
+}
+
+# Function to run docker operations
+run_docker() {
+    # Parse docker subcommands as flags
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            "--run"|"-r")
+                shift
+                if [[ $# -eq 0 ]]; then
+                    carts_error "--run requires a file argument"
+                    carts_info "Usage: carts docker --run <file> [options]"
+                    exit 1
+                fi
+                run_docker_run "$@"
+                return
+                ;;
+            "--update"|"-u")
+                shift
+                run_docker_update "$@"
+                return
+                ;;
+            "--kill"|"-k")
+                shift
+                run_docker_kill
+                return
+                ;;
+            "--clean"|"-c")
+                shift
+                run_docker_clean
+                return
+                ;;
+            "--help"|"-h")
+                carts_info "Docker operations:"
+                carts_info "  --run <file> [build_args] [-- runtime_args]    Run example in Docker containers"
+                carts_info "  --update [options]        Update Docker containers (requires clean repos)"
+                carts_info "  --kill, -k               Kill all processes in running ARTS containers"
+                carts_info "  --clean, -c              Clean Docker containers and images"
+                carts_info "  --help, -h               Show this help"
+                carts_line
+                carts_info "Examples:"
+                carts_info "  carts docker --run example.c                    # Run example.c in Docker containers"
+                carts_info "  carts docker --run matrixmul -- 100 10          # Run with runtime args: matrix size 100, block size 10"
+                carts_info "  carts docker --run fib --run-args --debug-only=db -- 15    # Build with debug, run with fib input 15"
+                carts_info "  carts docker --update                           # Update Docker image (requires clean repos)"
+                carts_info "  carts docker --update --arts -f                 # Force rebuild ARTS component"
+                carts_info "  carts docker --update --llvm --polygeist -f     # Force rebuild LLVM and Polygeist"
+                carts_info "  carts docker --kill                             # Kill all processes in containers"
+                carts_info "  carts docker --clean                            # Clean Docker setup"
+                exit 0
+                ;;
+            *)
+                carts_error "Unknown docker option: $1"
+                carts_info "Use 'carts docker --help' for available options"
+                exit 1
+                ;;
+        esac
+    done
+
+    # If no arguments provided, show help
+    carts_error "Docker command requires an option"
+    carts_info "Use 'carts docker --help' for available options"
+    exit 1
+}
+
+# Function to update Docker containers and commit/push changes
+run_docker_update() {
+    local docker_dir="${CARTS_DIR}/docker"
+    if [[ ! -d "$docker_dir" ]]; then
+        carts_error "Docker directory not found at $docker_dir"
+        exit 1
+    fi
+
+    # Parse update options
+    local force_mode=false
+    local force_components=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            "--arts"|"-a")
+                force_components+=("arts")
+                shift
+                ;;
+            "--polygeist"|"-p")
+                force_components+=("polygeist")
+                shift
+                ;;
+            "--llvm"|"-l")
+                force_components+=("llvm")
+                shift
+                ;;
+            "--carts"|"-c")
+                force_components+=("carts")
+                shift
+                ;;
+            "--force"|"-f")
+                force_mode=true
+                shift
+                ;;
+            "--help"|"-h")
+                carts_info "Docker update options:"
+                carts_info "  --arts, -a         Force rebuild ARTS runtime"
+                carts_info "  --polygeist, -p    Force rebuild Polygeist compiler"
+                carts_info "  --llvm, -l         Force rebuild LLVM compiler"
+                carts_info "  --carts, -c        Force rebuild CARTS framework"
+                carts_info "  --force, -f        Force rebuild mode (rebuilds even without changes)"
+                carts_info "  --help, -h         Show this help"
+                carts_line
+                carts_info "Examples:"
+                carts_info "  carts docker --update --arts -f     # Force rebuild ARTS"
+                carts_info "  carts docker --update --llvm -f     # Force rebuild LLVM"
+                carts_info "  carts docker --update -f            # Force rebuild everything"
+                exit 0
+                ;;
+            *)
+                carts_error "Unknown update option: $1"
+                carts_info "Use 'carts docker --update --help' for available options"
+                exit 1
+                ;;
+        esac
+    done
+
+    carts_step "Running Docker update script"
+    cd "$docker_dir"
+    if [[ -f "docker-update.sh" ]]; then
+        # Build command line arguments
+        local update_args=""
+        if [[ "$force_mode" == "true" ]]; then
+            update_args+=" --force"
+        fi
+        for component in "${force_components[@]}"; do
+            update_args+=" --$component"
+        done
+
+        if [[ -n "$CARTS_VERBOSE" ]]; then
+            carts_debug "Running: ./docker-update.sh$update_args"
+        fi
+        ./docker-update.sh $update_args
+    else
+        carts_error "docker-update.sh not found in $docker_dir"
+        exit 1
+    fi
+}
+
+# Function to kill all processes in Docker containers
+run_docker_kill() {
+    local docker_dir="${CARTS_DIR}/docker"
+    if [[ ! -d "$docker_dir" ]]; then
+        carts_error "Docker directory not found at $docker_dir"
+        exit 1
+    fi
+
+    carts_info "Killing all processes in ARTS containers..."
+    cd "$docker_dir"
+
+    # Run the docker-kill.sh script
+    if [[ -f "docker-kill.sh" ]]; then
+        if [[ -n "$CARTS_VERBOSE" ]]; then
+            carts_debug "Running: ./docker-kill.sh"
+        fi
+        ./docker-kill.sh
+    else
+        carts_error "docker-kill.sh not found in $docker_dir"
+        exit 1
+    fi
+}
+
+# Function to clean Docker containers and images
+run_docker_clean() {
+    local docker_dir="${CARTS_DIR}/docker"
+    if [[ ! -d "$docker_dir" ]]; then
+        carts_error "Docker directory not found at $docker_dir"
+        exit 1
+    fi
+
+    carts_info "Cleaning Docker multi-node setup..."
+    cd "$docker_dir"
+
+    # Run the docker-clean.sh script
+    if [[ -f "docker-clean.sh" ]]; then
+        if [[ -n "$CARTS_VERBOSE" ]]; then
+            carts_debug "Running: ./docker-clean.sh"
+        fi
+        ./docker-clean.sh
+    else
+        carts_error "docker-clean.sh not found in $docker_dir"
+        exit 1
+    fi
+}
+
+# Function to run examples in Docker containers
+run_docker_run() {
+    local docker_dir="${CARTS_DIR}/docker"
+    if [[ ! -d "$docker_dir" ]]; then
+        carts_error "Docker directory not found at $docker_dir"
+        exit 1
+    fi
+
+    # Change to docker directory and run docker-run.sh with all arguments
+    cd "$docker_dir"
+    if [[ -f "docker-run.sh" ]]; then
+        if [[ -n "$CARTS_VERBOSE" ]]; then
+            carts_debug "Running: ./docker-run.sh $*"
+        fi
+        ./docker-run.sh "$@"
+    else
+        carts_error "docker-run.sh not found in $docker_dir"
+        exit 1
+    fi
+}
+
+# Function to clean generated files
+run_clean() {
+    local docker_clean=false
+
+    # Parse clean options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            "--docker"|"-d")
+                docker_clean=true
+                shift
+                ;;
+            "--help"|"-h")
+                carts_info "Clean options:"
+                carts_info "  (default)       Clean generated files in current directory"
+                carts_info "  --docker, -d    Clean Docker containers and images"
+                carts_info "  --help, -h      Show this help"
+                exit 0
+                ;;
+            *)
+                carts_error "Unknown clean option: $1"
+                carts_info "Use --help for available options"
+                exit 1
+                ;;
+        esac
+    done
+
+    if [[ "$docker_clean" == "true" ]]; then
+        run_docker_clean
+    else
+        run_local_clean
+    fi
+}
+
+# Function to clean local generated files
+run_local_clean() {
+    carts_info "Cleaning generated files in current directory..."
+
+    # Files to remove
+    local files_to_remove=(
+        "*.mlir"
+        "*.ll"
+        "*.o"
+        "*.so"
+        "*.dylib"
+        "*.a"
+        "*.exe"
+        "DbGraph_*.dot"
+        "*.log"
+        "*.tmp"
+        ".artsPrintLock"
+    )
+
+    # Directories to remove
+    local dirs_to_remove=(
+        "build"
+        "cmake-build-*"
+        ".cache"
+        "introspection"
+    )
+
+    local removed_count=0
+
+    # Remove files
+    for pattern in "${files_to_remove[@]}"; do
+        for file in $pattern; do
+            if [[ -f "$file" ]]; then
+                if [[ -n "$CARTS_VERBOSE" ]]; then
+                    carts_debug "Removing file: $file"
+                fi
+                rm -f "$file"
+                ((removed_count++))
+            fi
+        done
+    done
+
+    # Remove directories
+    for pattern in "${dirs_to_remove[@]}"; do
+        for dir in $pattern; do
+            if [[ -d "$dir" ]]; then
+                if [[ -n "$CARTS_VERBOSE" ]]; then
+                    carts_debug "Removing directory: $dir"
+                fi
+                rm -rf "$dir"
+                ((removed_count++))
+            fi
+        done
+    done
+
+    # Remove executables (but preserve source files)
+    for file in *; do
+        if [[ -f "$file" && -x "$file" && ! "$file" =~ \.(cpp|c|h|hpp|py|sh|md|txt|cfg|yaml|json)$ ]]; then
+            if [[ -n "$CARTS_VERBOSE" ]]; then
+                carts_debug "Removing executable: $file"
+            fi
+            rm -f "$file"
+            ((removed_count++))
+        fi
+    done
+
+    if [[ $removed_count -eq 0 ]]; then
+        carts_info "No generated files found to clean"
+    else
+        carts_success "Cleaned $removed_count files/directories"
+    fi
+}
+
+# Function to clean Docker containers and images
+run_docker_clean() {
+    local docker_dir="${CARTS_DIR}/docker"
+    if [[ ! -d "$docker_dir" ]]; then
+        echo "Error: Docker directory not found at $docker_dir"
+        exit 1
+    fi
+
+    echo "Cleaning Docker multi-node setup..."
+
+    # Change to docker directory and run docker-clean.sh
+    cd "$docker_dir"
+    if [[ -f "docker-clean.sh" ]]; then
+        if [[ -n "$CARTS_VERBOSE" ]]; then
+            echo "Running: ./docker-clean.sh"
+        fi
+        ./docker-clean.sh
+    else
+        echo "Error: docker-clean.sh not found in $docker_dir"
+        exit 1
+    fi
+}
+
+# Function to run CARTS test suite
+run_check() {
+    carts_info "Running CARTS test suite..."
+    
+    # Check if tests directory exists
+    local tests_dir="${CARTS_DIR}/tests"
+    if [[ ! -d "$tests_dir" ]]; then
+        carts_error "Tests directory not found at $tests_dir"
+        carts_info "The test infrastructure may not be set up yet."
+        exit 1
+    fi
+    
+    # Check if llvm-lit exists
+    local llvm_lit="${LLVM_INSTALL_DIR}/bin/llvm-lit"
+    if [[ ! -f "$llvm_lit" ]]; then
+        carts_error "llvm-lit not found at $llvm_lit"
+        carts_info "Please ensure LLVM is properly installed by running 'carts build'"
+        exit 1
+    fi
+    
+    # Parse check options
+    local test_suite="all"
+    local extra_args=()
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            "--suite")
+                if [[ -n "$2" && "$2" != -* ]]; then
+                    test_suite="$2"
+                    shift 2
+                else
+                    carts_error "--suite requires a value (e.g., 'mlir', 'all')"
+                    exit 1
+                fi
+                ;;
+            "--help"|"-h")
+                carts_info "Check options:"
+                carts_info "  (default)           Run all CARTS tests"
+                carts_info "  --suite arts        Run only ARTS tests"
+                carts_info "  --suite all         Run all test suites (default)"
+                carts_info "  -v                  Verbose output from llvm-lit"
+                carts_info "  --help, -h          Show this help"
+                exit 0
+                ;;
+            *)
+                # Pass remaining arguments to llvm-lit
+                extra_args+=("$1")
+                shift
+                ;;
+        esac
+    done
+    
+    # Determine test path based on suite
+    local test_path
+    case "$test_suite" in
+        "all")
+            test_path="$tests_dir"
+            ;;
+        "arts")
+            test_path="$tests_dir/arts"
+            ;;
+        *)
+            carts_error "Unknown test suite '$test_suite'"
+            carts_info "Available suites: all, arts"
+            exit 1
+            ;;
+    esac
+    
+    # Ensure test path exists
+    if [[ ! -d "$test_path" ]]; then
+        carts_error "Test path not found: $test_path"
+        exit 1
+    fi
+    
+    carts_info "Test suite: $test_suite"
+    carts_info "Test path: $test_path"
+    carts_line
+    
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running: $llvm_lit -v $test_path ${extra_args[*]}"
+        carts_line
+    fi
+    
+    # Run the tests
+    "$llvm_lit" -v "$test_path" "${extra_args[@]}"
+    local exit_code=$?
+    
+    carts_line
+    if [[ $exit_code -eq 0 ]]; then
+        carts_success "CARTS test suite completed successfully!"
+    else
+        carts_error "CARTS test suite failed with exit code $exit_code"
+    fi
+    
+    return $exit_code
+}
+
+# Function to execute complete pipeline
+run_execute() {
+    local input_file="$1"
+    shift
+    
+    if [[ ! -f "$input_file" ]]; then
+        carts_error "Input file '$input_file' not found"
+        exit 1
+    fi
+    
+    # Extract base name without extension
+    local base_name="${input_file%.*}"
+    local extension="${input_file##*.}"
+    
+    # Validate input file type
+    if [[ "$extension" != "cpp" && "$extension" != "c" ]]; then
+        carts_error "Input file must be .cpp or .c"
+        exit 1
+    fi
+    
+    # Parse execute options
+    local execute_args=()
+    local run_args=()
+    local compile_args=()
+    local parsing_run_args=false
+    local parsing_compile_args=false
+    local debug_mode=false
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            "--run-args")
+                parsing_run_args=true
+                parsing_compile_args=false
+                shift
+                ;;
+            "--compile-args")
+                parsing_run_args=false
+                parsing_compile_args=true
+                shift
+                ;;
+            "-g")
+                debug_mode=true
+                shift
+                ;;
+            *)
+                if [[ "$parsing_run_args" == "true" ]]; then
+                    run_args+=("$1")
+                elif [[ "$parsing_compile_args" == "true" ]]; then
+                    compile_args+=("$1")
+                else
+                    execute_args+=("$1")
+                fi
+                shift
+                ;;
+        esac
+    done
+    
+    carts_header "CARTS Execution"
+    carts_info "Running CARTS for: $input_file"
+    carts_line
+    
+    # Step 1: C++ to MLIR
+    carts_step "Converting C++ to MLIR"
+
+    # Determine standard flag based on file extension
+    local std_flag=""
+    if [[ "$extension" == "cpp" ]]; then
+        std_flag="-std=c++17"
+    elif [[ "$extension" == "c" ]]; then
+        std_flag="-std=c17"
+    fi
+    
+    # Build cgeist flags
+    local cgeist_flags=("$std_flag" "-fopenmp" "-O0" "-S")
+
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running: carts cgeist $input_file ${cgeist_flags[*]} > ${base_name}.mlir"
+    fi
+    
+    # Temporarily disable verbose output for file generation
+    local original_verbose="$CARTS_VERBOSE"
+    unset CARTS_VERBOSE
+    
+    if ! carts cgeist "$input_file" "${cgeist_flags[@]}" > "${base_name}.mlir"; then
+        carts_error "Failed to convert C++ to MLIR"
+        exit 1
+    fi
+    
+    # Step 2: MLIR to LLVM IR with ARTS transformations
+    carts_step "Applying ARTS transformations and converting to LLVM IR"
+    
+    # Build the carts run command with additional args
+    local run_cmd_args=("${base_name}.mlir" "--O3" "--emit-llvm")
+    if [[ "$debug_mode" == "true" ]]; then
+        run_cmd_args+=("-g")
+    fi
+    
+    # Add any additional run arguments
+    if [[ ${#run_args[@]} -gt 0 ]]; then
+        run_cmd_args+=("${run_args[@]}")
+    fi
+    
+    if [[ -n "$original_verbose" ]]; then
+        carts_debug "Running: carts run ${run_cmd_args[*]} > ${base_name}-arts.ll"
+    fi
+    
+    if ! carts run "${run_cmd_args[@]}" > "${base_name}-arts.ll"; then
+        carts_error "Failed to apply ARTS transformations"
+        exit 1
+    fi
+    
+    # Restore verbose output
+    if [[ -n "$original_verbose" ]]; then
+        export CARTS_VERBOSE="$original_verbose"
+    fi
+    
+    # Step 3: Compile to executable
+    carts_step "Compiling to executable"
+    
+    # Build the compile command with additional args
+    local compile_cmd_args=("${base_name}-arts.ll" "-o" "${base_name}")
+    if [[ "$debug_mode" == "true" ]]; then
+        compile_cmd_args+=("-g")
+    fi
+    if [[ ${#compile_args[@]} -gt 0 ]]; then
+        compile_cmd_args+=("${compile_args[@]}")
+    fi
+    
+    if [[ -n "$CARTS_VERBOSE" ]]; then
+        carts_debug "Running: carts compile ${compile_cmd_args[*]}"
+    fi
+    
+    if ! carts compile "${compile_cmd_args[@]}"; then
+        carts_error "Failed to compile to executable"
+        exit 1
+    fi
+    
+    carts_line
+    carts_success "Generated executable: ${base_name}"
+    carts_line
+    carts_info "Intermediate files:"
+    carts_print "  MLIR: ${base_name}.mlir"
+    carts_print "  LLVM IR: ${base_name}-arts.ll"
+    carts_print "  Executable: ${base_name}"
+    carts_line
+    carts_info "To clean intermediate files, run: carts clean"
+    carts_header "CARTS Complete"
+}
+
+# Main script logic
+main() {
+    # Set LLVM_SYMBOLIZER_PATH for better stack traces on crashes
+    export LLVM_SYMBOLIZER_PATH="${LLVM_INSTALL_DIR}/bin/llvm-symbolizer"
+
+    # Detect host configuration and set shared flags
+    detect_host_config
+
+    # Detect and configure appropriate linker
+    detect_linker_config
+    
+    # Check if we have a command
+    if [[ $# -eq 0 ]]; then
+        show_usage
+        exit 1
+    fi
+    
+    local command="$1"
+    shift
+    
+    case "$command" in
+        "build")
+            run_build "$@"
+            ;;
+        "cgeist")
+            run_cgeist "$@"
+            ;;
+        "clang")
+            run_clang "$@"
+            ;;
+        "run")
+            run_run "$@"
+            ;;
+        "mlir-translate")
+            run_mlir_translate "$@"
+            ;;
+        "compile")
+            run_compile "$@"
+            ;;
+        "benchmark")
+            run_benchmark "$@"
+            ;;
+        "ui")
+            # Start the external ARTS UI backend and frontend (dev helpers)
+            carts_info "Launching ARTS UI backend on :8090"
+            (cd "${CARTS_DIR}/external/ArtsUI/backend" && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8090) &
+            carts_info "Launching ARTS UI frontend on :5174"
+            (cd "${CARTS_DIR}/external/ArtsUI/frontend" && npm run dev) &
+            carts_info "Open http://localhost:5174"
+            ;;
+        "visualize")
+            run_visualize "$@"
+            ;;
+        "setup")
+            run_setup "$@"
+            ;;
+        "clean")
+            run_clean "$@"
+            ;;
+        "check")
+            run_check "$@"
+            ;;
+        "execute")
+            run_execute "$@"
+            ;;
+        "docker")
+            run_docker "$@"
+            ;;
+        "help"|"-h"|"--help")
+            show_usage
+            ;;
+        *)
+            carts_error "Unknown command: $command"
+            show_usage
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@" 

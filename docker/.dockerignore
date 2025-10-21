@@ -1,0 +1,10 @@
+# Ignore everything except Dockerfile and scripts
+*
+!Dockerfile
+!docker-build.sh
+!docker-run.sh
+!docker-update.sh
+!docker-clean.sh
+!docker-compose.yml
+!README.md
+!run-test.sh

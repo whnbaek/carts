@@ -23,10 +23,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
-#define DEBUG_TYPE "edt-invariant-code-motion"
-#define line "-----------------------------------------\n"
-#define dbgs() (llvm::dbgs())
-#define DBGS() (dbgs() << "[" DEBUG_TYPE "] ")
+#include "arts/Utils/ArtsDebug.h"
+ARTS_DEBUG_SETUP(edt_invariant_code_motion);
 
 namespace mlir {
 namespace arts {
@@ -91,12 +89,11 @@ uint64_t moveEdtInvariantCode(EdtOp edtOp) {
       continue;
 
     /// Check if the op should be moved and can be hoisted
-    LLVM_DEBUG(dbgs() << "Checking op:\n"
-                      << "  - " << *op << "\n");
+    ARTS_INFO("Checking op:\n" << "  - " << *op);
     if (!canBeHoistedFromEdt(region, op))
-      continue;
+      continue; 
 
-    LLVM_DEBUG(dbgs() << "  - Moving EDT-invariant op\n");
+    ARTS_INFO("  - Moving EDT-invariant op");
     moveOutOfEdt(op);
     ++numMoved;
 

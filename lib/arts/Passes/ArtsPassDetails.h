@@ -6,9 +6,10 @@
 #ifndef DIALECT_CARTS_TRANSFORMS_PASSDETAILS_H
 #define DIALECT_CARTS_TRANSFORMS_PASSDETAILS_H
 
-#include "mlir/Pass/Pass.h"
 #include "arts/ArtsDialect.h"
 #include "arts/Passes/ArtsPasses.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Pass/Pass.h"
 
 namespace mlir {
 class FunctionOpInterface;

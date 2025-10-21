@@ -33,9 +33,9 @@
 ///   %val = memref.load %base[%sum]
 /// }
 /// ```
-/// This pass is also important when running the CreateDatablocks pass, since
+/// This pass is also important when running the CreateDbs pass, since
 /// it will create datablocks for all values used in the EDT region. If the
-/// invariant code is not moved out, the datablock will be created for the
+/// invariant code is not moved out, the db will be created for the
 /// invariant code, which is not the intended behavior.
 ///===========================================================================
 
@@ -48,7 +48,9 @@ namespace mlir {
 class Operation;
 class Region;
 class Value;
+} // namespace mlir
 
+namespace mlir {
 namespace arts {
 class EdtOp;
 

@@ -16,6 +16,10 @@ if(POLICY CMP0077)
   cmake_policy(SET CMP0077 NEW)
 endif()
 
+if(POLICY CMP0116)
+  cmake_policy(SET CMP0116 NEW)
+endif()
+
 option(LLVM_INCLUDE_TOOLS "Generate build targets for the LLVM tools." ON)
 option(LLVM_BUILD_TOOLS "Build the LLVM tools. If OFF, just generate build targets." ON)
 
@@ -64,13 +68,102 @@ include_directories(${PROJECT_BINARY_DIR}/include)
 link_directories(${LLVM_BUILD_LIBRARY_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 
+
+# Linker configuration
+option(CARTS_USE_LINKER "Specify linker to use for CARTS builds" "")
+if(CARTS_USE_LINKER)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --ld-path=${CARTS_USE_LINKER} -w")
+  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} --ld-path=${CARTS_USE_LINKER} -w")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} --ld-path=${CARTS_USE_LINKER} -w")
+  message(STATUS "Using custom linker: ${CARTS_USE_LINKER}")
+endif()
+
 # ARTS introspection options
 option(ENABLE_ARTS_INTROSPECTION "Enable ARTS introspection and counter system" OFF)
 if(ENABLE_ARTS_INTROSPECTION)
-  message(STATUS "ARTS introspection enabled - will collect performance data")
-  add_definitions(-DINSPECTOR)
+  message(STATUS "ARTS introspection enabled")
+  add_definitions(-DCOUNTERS)
+  add_definitions(-DMETRICS)
 else()
-  message(STATUS "ARTS introspection disabled - zero runtime overhead")
+  message(STATUS "ARTS introspection disabled")
+endif()
+
+
+# CARTS testing options
+option(CARTS_ENABLE_TESTS "Enable CARTS test suite" ON)
+if(CARTS_ENABLE_TESTS)
+  message(STATUS "CARTS tests enabled")
+  set(CARTS_TOOLS_DIR bin)
+
+  # Locate LLVM test tools (llvm-lit and FileCheck) from common LLVM build/install dirs
+  set(_LLVM_TOOL_HINT_DIRS
+      ${LLVM_TOOLS_BINARY_DIR}
+      ${LLVM_RUNTIME_OUTPUT_INTDIR}
+      ${LLVM_BINARY_DIR}
+      ${LLVM_DIR}/../../bin
+      ${LLVM_DIR}/../bin
+      ${POLYGEIST_DIR}/llvm-project/build/bin
+      ${POLYGEIST_DIR}/llvm-project/build/NATIVE/bin
+      ${CMAKE_SOURCE_DIR}/.install/llvm/bin)
+
+  find_program(LLVM_LIT_EXECUTABLE NAMES llvm-lit lit.py
+               HINTS ${_LLVM_TOOL_HINT_DIRS}
+               DOC "Path to llvm-lit test runner")
+  find_program(FILECHECK_EXECUTABLE NAMES FileCheck
+               HINTS ${_LLVM_TOOL_HINT_DIRS}
+               DOC "Path to FileCheck tool")
+
+  # Export a conventional var for downstream use if needed
+  if(LLVM_LIT_EXECUTABLE)
+    get_filename_component(LLVM_LIT_TOOLS_DIR ${LLVM_LIT_EXECUTABLE} DIRECTORY)
+  else()
+    set(LLVM_LIT_TOOLS_DIR "")
+  endif()
+
+  set(MISSING_TOOLS "")
+  if(NOT LLVM_LIT_EXECUTABLE)
+    list(APPEND MISSING_TOOLS llvm-lit)
+  endif()
+  if(NOT FILECHECK_EXECUTABLE)
+    list(APPEND MISSING_TOOLS FileCheck)
+  endif()
+  if(NOT EXISTS ${CMAKE_SOURCE_DIR}/tools/carts)
+    list(APPEND MISSING_TOOLS "carts wrapper script")
+  endif()
+
+  if(MISSING_TOOLS)
+    message(WARNING "Missing required test tools: ${MISSING_TOOLS}")
+    message(WARNING "Please ensure your LLVM build includes testing tools (llvm-lit, FileCheck) or install them via your LLVM build.")
+  else()
+    message(STATUS "All required test tools found")
+  endif()
+  
+  # Create test targets with proper dependencies
+  add_custom_target(check
+    COMMAND ${CMAKE_SOURCE_DIR}/tools/carts check
+    COMMENT "Running CARTS test suite"
+    USES_TERMINAL
+    VERBATIM
+  )
+  
+  # Add convenience target for ARTS tests specifically  
+  add_custom_target(check-arts
+    COMMAND ${CMAKE_SOURCE_DIR}/tools/carts check --suite arts
+    COMMENT "Running CARTS ARTS test suite"
+    USES_TERMINAL
+    VERBATIM
+  )
+  
+  # Add verbose test targets
+  add_custom_target(check-verbose
+    COMMAND ${CMAKE_SOURCE_DIR}/tools/carts check -v
+    COMMENT "Running CARTS test suite (verbose)"
+    USES_TERMINAL
+    VERBATIM
+  )
+  
+else()
+  message(STATUS "CARTS tests disabled")
 endif()
 
 
@@ -92,7 +185,7 @@ endif()
 # set(CARTS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(CARTS_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 set(CARTS_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include )
-set(CARTS_TOOLS_DIR ${CMAKE_BINARY_DIR}/bin)
+set(CARTS_TOOLS_DIR bin)
 set(CARTS_UTILS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/utils)
 
 # Add the subdirectories.

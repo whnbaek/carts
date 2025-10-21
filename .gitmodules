@@ -1,0 +1,12 @@
+[submodule "external/arts"]
+	path = external/arts
+	url = https://github.com/randreshg/ARTS.git
+
+[submodule "external/Polygeist"]
+	path = external/Polygeist
+	url = https://github.com/randreshg/Polygeist.git
+	branch = carts
+
+[submodule "external/carts-benchmarks"]
+	path = external/carts-benchmarks
+	url = https://github.com/randreshg/carts-benchmarks.git

@@ -3,14 +3,24 @@ message(STATUS "POLYGEIST_INCLUDE_DIR: ${POLYGEIST_BUILD_DIR}/include")
 message(STATUS "POLYGEIST_LIBRARY_DIR: ${POLYGEIST_BUILD_DIR}/lib")
 
 add_mlir_dialect_library(MLIRArtsTransforms
+  ArtsInliner.cpp
   ConvertOpenMPToArts.cpp
   Edt.cpp
-  CreateDatablocks.cpp
-  Datablock.cpp
+  CreateDbs.cpp
+  CanonicalizeMemrefs.cpp
+  Db.cpp
   CreateEpochs.cpp
   ConvertArtsToLLVM.cpp
+  EpochLowering.cpp
+  EdtLowering.cpp
+  EdtPtrRematerialization.cpp
   EdtInvariantCodeMotion.cpp
-  EdtPointerRematerialization.cpp
+  EdtPtrRematerialization.cpp
+  CanonicalizeDbs.cpp
+  DbLowering.cpp
+  ParallelEdtLowering.cpp
+  EdtLowering.cpp
+  Concurrency.cpp
   ${CARTS_TRANSFORMS_SOURCE_FILES}
   ${CARTS_UTILS_SOURCE_FILES}
   ${CARTS_CODEGEN_SOURCE_FILES}
@@ -27,10 +37,6 @@ LINK_LIBS PUBLIC
   MLIRAffineUtils
   MLIRFuncDialect
   MLIRFuncTransforms
-  MLIRGPUToGPURuntimeTransforms
-  MLIRGPUTransforms
-  MLIRGPUToNVVMTransforms
-  MLIRIR
   MLIRLLVMDialect
   MLIRMathDialect
   MLIRMathToLLVM
@@ -42,7 +48,6 @@ LINK_LIBS PUBLIC
   MLIRSCFToControlFlow
   MLIRTargetLLVMIRImport
   MLIRTransformUtils
-  MLIRGPUToROCDLTransforms
   MLIRControlFlowToLLVM
   MLIRMemRefToLLVM
   MLIRFuncToLLVM
@@ -71,4 +76,3 @@ target_compile_definitions(obj.MLIRArtsTransforms
   CARTS_PGO_ALTERNATIVE_ENV_VAR="${CARTS_PGO_ALTERNATIVE_ENV_VAR}"
   CARTS_PGO_DATA_DIR_ENV_VAR="${CARTS_PGO_DATA_DIR_ENV_VAR}"
 )
-

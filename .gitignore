@@ -4,8 +4,16 @@
 .build
 .vscode
 compile_commands.json
-external
 build/
-CMakeFiles
+CMakeFiles/
 core.*
-./enable
+
+
+# External dependencies - ignore build artifacts but not the submodules themselves
+external/*/build/
+external/*/CMakeFiles/
+external/*/*.so
+external/*/*.a
+external/*/*.o
+external/*/compile_commands.json
+external/*/cmake_install.cmake
